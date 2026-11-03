@@ -50,6 +50,10 @@ export function Reports() {
             <div className="text-xs text-blue-600 font-semibold uppercase tracking-wider mt-0.5">
               Multimodal Clinical Decision-Support Summary
             </div>
+            <div className="mt-2">
+              <span className="text-lg font-bold text-gray-900 block">{patient.patient_name || 'Anonymous Patient'}</span>
+              <span className="text-xs text-blue-700 font-mono font-semibold">Case Reference ID: {patient.id}</span>
+            </div>
             <p className="text-[11px] text-gray-400 mt-1">Generated: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
           </div>
           <div className="text-right">
@@ -65,9 +69,10 @@ export function Reports() {
             1. Patient Clinical Profile
           </h2>
           <div className="grid grid-cols-4 gap-4 text-xs">
+            <div className="col-span-2"><span className="text-gray-400 block">Patient Name:</span><strong className="text-sm text-gray-900">{patient.patient_name || 'Anonymous Patient'}</strong></div>
             <div><span className="text-gray-400 block">Age:</span><strong>{patient.age} years</strong></div>
             <div><span className="text-gray-400 block">Gender:</span><strong className="capitalize">{patient.gender}</strong></div>
-            <div><span className="text-gray-400 block">Smoking:</span><strong>{patient.smoking_status}</strong></div>
+            <div><span className="text-gray-400 block">Smoking:</span><strong>{patient.smoking_status || patient.smoking_history}</strong></div>
             <div><span className="text-gray-400 block">Histology:</span><strong className="capitalize">{patient.histology}</strong></div>
             <div><span className="text-gray-400 block">Clinical Stage:</span><strong className="text-blue-700 font-bold uppercase">{patient.overall_stage}</strong></div>
             <div><span className="text-gray-400 block">TNM Matrix:</span><strong>T{patient.t_stage} N{patient.n_stage} M{patient.m_stage}</strong></div>
@@ -117,34 +122,51 @@ export function Reports() {
           )}
         </div>
 
-        {/* 3D Imaging Assessment Summary */}
+        {/* Medical Imaging & Diagnostics */}
         <div>
           <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide border-b pb-1 mb-3">
-            3. Medical Imaging Analysis (NoduleMNIST3D)
+            3. Medical Imaging & Diagnostics
           </h2>
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-xs space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Selected Research Scan ID:</span>
-              <span className="font-mono font-bold">Sample #12 (Test Split)</span>
+          {patient.images && patient.images.length > 0 ? (
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">CT Scan Status:</span>
+                <span className="font-bold text-emerald-700">Uploaded & Verified ({patient.images[0].original_filename})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Image Availability:</span>
+                <span className="font-semibold text-gray-800">{patient.images.length} Medical Image Attached</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Dimensions & Format:</span>
+                <span className="font-mono">{patient.images[0].image_dimensions} · {patient.images[0].file_format.toUpperCase()}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Model Architecture:</span>
-              <span>Random Forest Classifier on 3D Statistical Features (Test AUC: 0.894)</span>
+          ) : (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2 text-slate-600">
+              <div className="flex justify-between">
+                <span className="text-slate-500">CT Scan Status:</span>
+                <span className="font-bold text-slate-700">Not Uploaded</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Image Availability:</span>
+                <span className="font-bold text-slate-700">No medical image available</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Analysis Status:</span>
+                <span className="font-bold text-slate-700">Not Available</span>
+              </div>
+              <p className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-200">
+                No CT scan has been uploaded for this patient assessment. External research datasets are strictly isolated and never substituted for patient scans.
+              </p>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Predicted Classification:</span>
-              <strong className="text-emerald-700">Benign (P: 84.2% Benign vs 15.8% Malignant)</strong>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1 italic">
-              Note: 28x28x28 voxel low-resolution CT. Research use only; not a substitute for diagnostic PACS radiologist review.
-            </p>
-          </div>
+          )}
         </div>
 
         {/* Treatment Candidates Ranking */}
         <div>
           <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide border-b pb-1 mb-3">
-            3. Treatment Decision Support (Heuristic Guideline Ranking)
+            4. Treatment Decision Support (Heuristic Guideline Ranking)
           </h2>
           <table className="w-full text-left text-xs border border-gray-200 rounded-lg overflow-hidden">
             <thead className="bg-gray-100 font-semibold text-gray-600">

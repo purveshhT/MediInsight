@@ -11,8 +11,8 @@ import {
   PieChart, Pie, Cell, CartesianGrid
 } from 'recharts';
 import {
-  getAssessment, getImagingSample, predictNodule, getClinicalAnalytics,
-  listAssessments, getImageFileUrl
+  getAssessment, getClinicalAnalytics,
+  listAssessments, getImageFileUrl, analyzeAssessmentImage
 } from '../../services/api';
 import { CHART_COLORS } from '../../utils/colors';
 
@@ -28,11 +28,9 @@ export function ClinicalAnalysis() {
   const [clinicalCohort, setClinicalCohort] = useState<any>(null);
   const [allAssessments, setAllAssessments] = useState<any[]>([]);
 
-  // 3D Volume slice state
-  const [researchSample, setResearchSample] = useState<any>(null);
-  const [prediction, setPrediction] = useState<any>(null);
-  const [loadingPred, setLoadingPred] = useState(false);
-  const [activeSlice, setActiveSlice] = useState<'slice_25pct' | 'slice_50pct' | 'slice_75pct'>('slice_50pct');
+  // Uploaded scan radiometric analysis state
+  const [scanAnalysis, setScanAnalysis] = useState<any>(null);
+  const [analyzingScan, setAnalyzingScan] = useState(false);
 
   // Load available assessments for switcher
   useEffect(() => {
@@ -48,24 +46,23 @@ export function ClinicalAnalysis() {
   // Fetch target assessment details from SQLite
   useEffect(() => {
     if (!assessmentId) return;
+    setScanAnalysis(null);
     getAssessment(assessmentId)
       .then(res => {
         setAssessmentData(res.data);
-        const sampleId = res.data.assessment?.research_sample_id ?? 12;
-        const split = res.data.assessment?.research_split ?? 'test';
-        getImagingSample(sampleId, split)
-          .then(imgRes => setResearchSample(imgRes.data))
-          .catch(() => {});
       })
       .catch(() => {});
   }, [assessmentId]);
 
   const patient = assessmentData?.assessment || {
     id: 'DEMO-0001',
+    patient_name: 'Arthur Pendelton',
     age: 68,
     gender: 'male',
     smoking_history: 'Former Smoker',
     smoking_pack_years: 35,
+    occupation: 'Retired University Professor',
+    address: '452 Elm Street, Suite 4B, Cambridge, MA 02138',
     histology: 'adenocarcinoma',
     overall_stage: 'II',
     t_stage: '2',
@@ -80,19 +77,18 @@ export function ClinicalAnalysis() {
     other_biomarkers: 'PD-L1: 45%',
     medical_history: 'Hypertension, coronary stent in 2021',
     comorbidities: 'Hypertension',
-    notes: 'Solitary right lower lobe nodule. Patient undergoing multimodal workup.'
+    notes: 'Solitary right lower lobe mass. Multimodal clinical workup.'
   };
 
   const images = assessmentData?.images || [];
 
-  const handlePredict = () => {
-    const sampleId = patient.research_sample_id ?? 12;
-    const split = patient.research_split ?? 'test';
-    setLoadingPred(true);
-    predictNodule(sampleId, split)
-      .then(res => setPrediction(res.data))
-      .catch(() => {})
-      .finally(() => setLoadingPred(false));
+  const handleAnalyzeUploadedScan = () => {
+    if (images.length === 0) return;
+    setAnalyzingScan(true);
+    analyzeAssessmentImage(patient.id, images[0].id)
+      .then(res => setScanAnalysis(res.data))
+      .catch(err => console.error('Image analysis error:', err))
+      .finally(() => setAnalyzingScan(false));
   };
 
   // Cohort comparison metrics
@@ -107,6 +103,7 @@ export function ClinicalAnalysis() {
 
   // Missing fields completeness calculation
   const criticalFields = [
+    { label: 'Patient Name', val: patient.patient_name && patient.patient_name !== 'Anonymous Patient' },
     { label: 'Patient Age', val: patient.age },
     { label: 'Histology', val: patient.histology },
     { label: 'Overall Stage', val: patient.overall_stage },
@@ -118,7 +115,7 @@ export function ClinicalAnalysis() {
     { label: 'KRAS Status', val: patient.kras_status && patient.kras_status !== 'Not Tested' && patient.kras_status !== 'Unknown' },
     { label: 'ALK Status', val: patient.alk_status && patient.alk_status !== 'Not Tested' && patient.alk_status !== 'Unknown' },
     { label: 'Performance Status', val: patient.performance_status },
-    { label: 'Uploaded Scan', val: images.length > 0 || patient.research_sample_id !== null },
+    { label: 'Uploaded Scan', val: images.length > 0 },
   ];
 
   const completedCount = criticalFields.filter(f => Boolean(f.val)).length;
@@ -129,29 +126,31 @@ export function ClinicalAnalysis() {
       {/* Top Header & Patient Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Clinical & Diagnostic Analysis</h1>
-            <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-mono font-bold rounded-md">
-              {patient.id}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {patient.patient_name || 'Anonymous Patient'}
+            </h1>
+            <span className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-mono font-bold rounded-lg border border-blue-200">
+              Case Ref: {patient.id}
             </span>
           </div>
           <p className="text-gray-500 text-xs mt-1">
-            Multimodal clinical characteristics, comparative cohort analytics, and volumetric scan evaluation.
+            Multimodal clinical profile, diagnostic investigations, and laboratory workup for {patient.patient_name || 'this patient'}.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Assessment Picker */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-500">Inspect Assessment:</span>
+            <span className="text-gray-500 font-medium">Select Case:</span>
             <select
               value={assessmentId}
               onChange={(e) => setAssessmentId(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white font-mono font-bold"
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white font-medium shadow-2xs"
             >
               {allAssessments.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.id} ({a.age}y, {a.gender}, {a.overall_stage})
+                  {a.patient_name || 'Anonymous Patient'} — {a.id} ({a.age}y, Stage {a.overall_stage || 'N/A'})
                 </option>
               ))}
             </select>
@@ -211,10 +210,12 @@ export function ClinicalAnalysis() {
 
           <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs">
             <span className="text-[11px] text-gray-400 block mb-0.5">Imaging Status</span>
-            <strong className="text-sm text-cyan-800 block">
-              {images.length > 0 ? `${images.length} Uploaded Scan` : `Sample #${patient.research_sample_id ?? 12}`}
+            <strong className={`text-sm block ${images.length > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+              {images.length > 0 ? `${images.length} Uploaded Scan` : 'Not Uploaded'}
             </strong>
-            <span className="text-[11px] text-cyan-600">3D Volumetric Analysis</span>
+            <span className="text-[11px] text-gray-500">
+              {images.length > 0 ? 'Verified Patient Scan' : 'No medical image'}
+            </span>
           </div>
         </div>
 
@@ -421,131 +422,166 @@ export function ClinicalAnalysis() {
         </div>
       </div>
 
-      {/* SECTION F: MEDICAL IMAGING ANALYTICS & 3D CT SLICE VIEWER */}
+      {/* SECTION F: MEDICAL IMAGING & DIAGNOSTIC ANALYTICS */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-6">
         <div className="flex flex-wrap items-center justify-between border-b pb-3 gap-2">
           <div className="flex items-center gap-2">
             <Scan className="w-5 h-5 text-cyan-600" />
-            <h3 className="text-sm font-bold text-gray-800">Section F: Medical Imaging Analytics & 3D Volume Exploration</h3>
+            <h3 className="text-sm font-bold text-gray-800">Section F: Patient Medical Imaging & Diagnostics Analytics</h3>
           </div>
-          <span className="text-xs px-2.5 py-0.5 bg-cyan-50 text-cyan-800 border border-cyan-200 rounded-md font-semibold">
-            Volumetric Radiomic Analysis
+          <span className={`text-xs px-2.5 py-0.5 rounded-md font-semibold border ${
+            images.length > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+          }`}>
+            {images.length > 0 ? 'CT Scan Uploaded' : 'CT Scan Not Uploaded'}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Left: Uploaded Scan View (if any) or Research 3D Volume */}
-          <div className="space-y-4">
-            <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-              {images.length > 0 ? '1. Uploaded Patient Scan (Local Storage)' : '1. Associated 3D CT Volume (NoduleMNIST3D)'}
+        {images.length === 0 ? (
+          /* Scenario A: Doctor has not uploaded a CT scan */
+          <div className="p-8 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center space-y-4">
+            <div className="w-14 h-14 bg-slate-200 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+              <Scan className="w-7 h-7" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h4 className="text-sm font-bold text-slate-800">
+                No CT scan has been uploaded for this patient assessment.
+              </h4>
+              <p className="text-xs text-slate-500">
+                To guarantee strict data integrity, MediInsight AI never displays substitute scans, default images, or unrelated research cohort scans for individual patient assessments.
+              </p>
             </div>
 
-            {images.length > 0 ? (
-              <div className="bg-black p-4 rounded-2xl border-2 border-gray-800 flex flex-col items-center justify-center">
-                <img
-                  src={getImageFileUrl(images[0].id)}
-                  alt="Uploaded Patient Scan"
-                  className="max-h-64 object-contain rounded-lg"
-                />
-                <div className="text-[11px] text-gray-400 mt-3 font-mono">
-                  {images[0].original_filename} ({images[0].image_dimensions} · {images[0].file_format.toUpperCase()})
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg mx-auto pt-2 text-left text-xs">
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">CT Scan Status</span>
+                <span className="font-bold text-slate-700">Not Uploaded</span>
               </div>
-            ) : researchSample?.slices ? (
-              <div className="flex flex-col items-center">
-                <div className="bg-black p-3 rounded-2xl border-2 border-neutral-800 shadow-md">
-                  <div
-                    className="grid grid-cols-28 gap-0 border border-neutral-700"
-                    style={{ gridTemplateColumns: 'repeat(28, minmax(0, 1fr))', width: 224, height: 224 }}
-                  >
-                    {researchSample.slices[activeSlice]?.flat().map((pixelVal: number, idx: number) => (
-                      <div
-                        key={idx}
-                        style={{ backgroundColor: `rgb(${pixelVal}, ${pixelVal}, ${pixelVal})` }}
-                        className="w-2 h-2"
-                      />
-                    ))}
-                  </div>
-                </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Image Availability</span>
+                <span className="font-bold text-slate-700">No medical image available</span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Analysis Status</span>
+                <span className="font-bold text-slate-700">Not Available</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Scenario B & C: Doctor has uploaded a CT scan for this assessment */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Left: Uploaded Patient Scan */}
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center justify-between">
+                <span>1. Uploaded Patient Scan</span>
+                <span className="text-[11px] font-mono text-emerald-600 font-bold">
+                  Associated with {patient.patient_name || patient.id}
+                </span>
+              </div>
 
-                <div className="flex gap-2 mt-3 text-xs bg-gray-100 p-1.5 rounded-xl">
-                  {(['slice_25pct', 'slice_50pct', 'slice_75pct'] as const).map(sl => (
-                    <button
-                      key={sl}
-                      onClick={() => setActiveSlice(sl)}
-                      className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                        activeSlice === sl ? 'bg-white text-cyan-800 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-                      }`}
+              <div className="bg-slate-950 p-4 rounded-2xl border-2 border-slate-800 flex flex-col items-center justify-center min-h-64">
+                {images[0].file_format.toLowerCase() === 'pdf' ? (
+                  <div className="p-10 text-center space-y-2">
+                    <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+                    <span className="text-xs text-slate-200 font-bold block">{images[0].original_filename}</span>
+                    <span className="text-[11px] text-slate-400 block">Digital Laboratory / Pathology PDF Document</span>
+                    <a
+                      href={getImageFileUrl(images[0].id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
                     >
-                      {sl === 'slice_25pct' ? 'Axial 25%' : sl === 'slice_50pct' ? 'Center 50%' : 'Axial 75%'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="p-8 text-center text-xs text-gray-400 border rounded-xl">No imaging scan attached</div>
-            )}
-          </div>
-
-          {/* Right: AI Prediction & Radiomic Metrics */}
-          <div className="space-y-4">
-            <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-              2. 3D Volume Malignancy Classification
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Volumetric Grid:</span>
-                <span className="font-mono font-bold">28 × 28 × 28 Voxels (uint8)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Benchmark Model:</span>
-                <span>Random Forest (100 Trees, Class Weighted)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Held-Out Test ROC-AUC:</span>
-                <strong className="text-blue-700 font-mono">0.8941</strong>
+                      Open PDF Document
+                    </a>
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      src={getImageFileUrl(images[0].id)}
+                      alt={`Medical scan for ${patient.patient_name || patient.id}`}
+                      className="max-h-72 object-contain rounded-lg shadow-md"
+                    />
+                    <div className="text-[11px] text-slate-400 mt-3 font-mono text-center">
+                      {images[0].original_filename} · {images[0].image_dimensions} · {images[0].file_format.toUpperCase()} · {(images[0].file_size / 1024).toFixed(1)} KB
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            <button
-              onClick={handlePredict}
-              disabled={loadingPred}
-              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors"
-            >
-              <Brain className="w-4 h-4" />
-              <span>{loadingPred ? 'Computing Radiomic Descriptors...' : 'Run Automated 3D Volume Classifier'}</span>
-            </button>
-
-            {prediction && (
-              <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-xl space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-cyan-950">Predicted Malignancy Status:</span>
-                  <span className={`px-2.5 py-1 rounded-md font-bold text-xs ${
-                    prediction.predicted_label === 1 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
-                  }`}>
-                    {prediction.predicted_label_name}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-cyan-900">
-                  <div className="flex justify-between">
-                    <span>P(Benign):</span>
-                    <strong className="font-mono">{(prediction.probabilities.Benign * 100).toFixed(1)}%</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>P(Malignant):</span>
-                    <strong className="font-mono">{(prediction.probabilities.Malignant * 100).toFixed(1)}%</strong>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-cyan-800 italic">
-                  Evaluated using 20 volumetric intensity and gradient descriptors. Research prototype; not validated for clinical diagnosis.
-                </p>
+            {/* Right: Scan Metadata & Radiometric Profiling */}
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                2. Scan Metadata & Diagnostic Verification
               </div>
-            )}
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">CT Scan Status:</span>
+                  <span className="font-bold text-emerald-700">Uploaded & Verified</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Image Availability:</span>
+                  <span className="font-semibold text-slate-800">1 Medical Image Attached</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Storage Identifier:</span>
+                  <span className="font-mono text-slate-700 text-[11px]">{images[0].id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Scan Type:</span>
+                  <span className="font-medium text-slate-800">{images[0].image_type || '2D Diagnostic Radiograph'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Dimensions:</span>
+                  <span className="font-mono font-medium">{images[0].image_dimensions}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleAnalyzeUploadedScan}
+                disabled={analyzingScan}
+                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors"
+              >
+                <Brain className="w-4 h-4" />
+                <span>{analyzingScan ? 'Extracting Radiometric Descriptors...' : 'Run Radiometric & Density Analysis'}</span>
+              </button>
+
+              {scanAnalysis && (
+                <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-xl space-y-3 text-xs">
+                  <div className="flex items-center justify-between font-bold text-cyan-950">
+                    <span>Analysis Status:</span>
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold">{scanAnalysis.analysis_status}</span>
+                  </div>
+
+                  {scanAnalysis.metrics && (
+                    <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="p-2 bg-white rounded border border-cyan-100">
+                        <span className="text-slate-400 block text-[10px]">Mean Attenuation:</span>
+                        <strong className="text-slate-800">{scanAnalysis.metrics.mean_attenuation}</strong>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-cyan-100">
+                        <span className="text-slate-400 block text-[10px]">Std Deviation:</span>
+                        <strong className="text-slate-800">{scanAnalysis.metrics.std_deviation}</strong>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-cyan-100">
+                        <span className="text-slate-400 block text-[10px]">Dense Tissue Fraction:</span>
+                        <strong className="text-slate-800">{scanAnalysis.metrics.dense_tissue_pct}%</strong>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-cyan-100">
+                        <span className="text-slate-400 block text-[10px]">Aerated Volume:</span>
+                        <strong className="text-slate-800">{scanAnalysis.metrics.aerated_fraction_pct}%</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-cyan-900 leading-relaxed italic bg-white/70 p-2.5 rounded-lg border border-cyan-200/60">
+                    {scanAnalysis.model_compatibility_note}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* SECTION: BLOOD WORKUP & LABORATORY INVESTIGATIONS */}

@@ -12,6 +12,7 @@ import uuid
 import shutil
 from datetime import datetime
 from PIL import Image
+import numpy as np
 
 from app.utils.config import UPLOADS_DIR
 from app.database.db import (
@@ -31,6 +32,7 @@ MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024  # 30 MB
 
 
 class AssessmentCreateRequest(BaseModel):
+    patient_name: str = Field(..., min_length=1, description="Patient Full Name (Required)")
     age: float = Field(..., ge=0, le=120, description="Patient age in years")
     gender: str = Field(..., description="male or female")
     occupation: Optional[str] = "Unspecified"
@@ -66,6 +68,7 @@ AssessmentRequest = AssessmentCreateRequest
 
 
 class AssessmentUpdateRequest(BaseModel):
+    patient_name: Optional[str] = None
     age: Optional[float] = None
     gender: Optional[str] = None
     occupation: Optional[str] = None
@@ -314,6 +317,75 @@ def list_assessment_images(assessment_id: str):
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return {"total": len(rows), "images": rows}
+
+
+@router.post("/{assessment_id}/images/{image_id}/analyze")
+def analyze_uploaded_image(assessment_id: str, image_id: str):
+    """
+    Perform on-demand radiometric analysis of an uploaded patient scan.
+    Extracts statistical density metrics if the format is compatible.
+    Never analyzes images from another patient or research dataset.
+    """
+    img = get_medical_image_by_id(image_id)
+    if not img or str(img.get("assessment_id")) != str(assessment_id):
+        raise HTTPException(status_code=404, detail="Image not found for this assessment.")
+
+    file_path = img.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Image file missing on server disk.")
+
+    ext = img.get("file_format", "").lower()
+    if ext in ["png", "jpg", "jpeg", "bmp", "tiff"]:
+        try:
+            with Image.open(file_path) as im:
+                gray = im.convert("L")
+                arr = np.array(gray, dtype=np.float32) / 255.0
+                mean_val = float(arr.mean())
+                std_val = float(arr.std())
+                min_val = float(arr.min())
+                max_val = float(arr.max())
+                dense_frac = float((arr > 0.5).mean())
+                aerated_frac = float((arr < 0.15).mean())
+
+                return {
+                    "status": "success",
+                    "assessment_id": assessment_id,
+                    "image_id": image_id,
+                    "filename": img["original_filename"],
+                    "analysis_status": "Completed - 2D Radiometric Profiling",
+                    "compatibility": "2D Diagnostic Radiograph/Slice",
+                    "metrics": {
+                        "mean_attenuation": round(mean_val, 4),
+                        "std_deviation": round(std_val, 4),
+                        "min_density": round(min_val, 4),
+                        "max_density": round(max_val, 4),
+                        "dense_tissue_pct": round(dense_frac * 100, 2),
+                        "aerated_fraction_pct": round(aerated_frac * 100, 2),
+                        "dimensions": f"{im.width} × {im.height} px",
+                        "color_space": im.mode
+                    },
+                    "model_compatibility_note": "Uploaded 2D scan successfully characterized via 2D radiometric profiling. Full 3D Volumetric CNN/RF benchmark specifically requires 3D CT volume series."
+                }
+        except Exception as e:
+            return {
+                "status": "error",
+                "assessment_id": assessment_id,
+                "image_id": image_id,
+                "analysis_status": "Failed",
+                "compatibility": "Incompatible",
+                "error": str(e)
+            }
+    else:
+        return {
+            "status": "stored_only",
+            "assessment_id": assessment_id,
+            "image_id": image_id,
+            "filename": img["original_filename"],
+            "analysis_status": "Document Stored",
+            "compatibility": "Non-Raster / Document Format",
+            "metrics": None,
+            "model_compatibility_note": f"Format '{ext.upper()}' securely archived in patient record. Automated visual density extraction is not applicable to non-raster documents."
+        }
 
 
 # Standalone image access routes mounted on /api

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   UserPlus, AlertCircle, CheckCircle2, ChevronRight, Activity, Scan,
   Upload, FileText, X, Image as ImageIcon, Check, Save, Info, AlertTriangle,
-  FlaskConical, HeartPulse, Droplets, Stethoscope, Briefcase, MapPin
+  FlaskConical, HeartPulse, Droplets, Stethoscope, Briefcase, MapPin, User
 } from 'lucide-react';
 import { createAssessment, uploadAssessmentImage } from '../../services/api';
 
@@ -36,6 +36,7 @@ export function NewAssessment() {
   // Form state spanning all sections
   const [formData, setFormData] = useState({
     // Section A: Demographics
+    patient_name: '',
     age: 65,
     gender: 'male',
     occupation: 'Retired',
@@ -68,8 +69,8 @@ export function NewAssessment() {
     // Treatment & notes
     chemotherapy: 'No',
     radiation: 'No',
-    notes: 'Patient presented with intermittent hemoptysis and dyspnea on exertion. CT scan reveals solitary 3.4cm spiculated nodule in right lower lobe.',
-    research_sample_id: 12,
+    notes: 'Patient presented with intermittent hemoptysis and dyspnea on exertion. Solitary mass in right lower lobe.',
+    research_sample_id: null,
     research_split: 'test',
     assessment_status: 'completed',
   });
@@ -271,10 +272,28 @@ export function NewAssessment() {
     };
   };
 
+  const handleStepClick = (targetStep: number) => {
+    if (activeStep === 1 && targetStep > 1) {
+      if (!formData.patient_name || formData.patient_name.trim() === '') {
+        setError('Patient Name is required before proceeding to the next section.');
+        return;
+      }
+    }
+    setError(null);
+    setActiveStep(targetStep);
+  };
+
   const handleSubmit = async (e: React.FormEvent, isDraft = false) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!formData.patient_name || formData.patient_name.trim() === '') {
+      setError('Patient Name is required to save the assessment. Please enter the patient name.');
+      setActiveStep(1);
+      setLoading(false);
+      return;
+    }
 
     try {
       const payload = {
@@ -360,7 +379,7 @@ export function NewAssessment() {
         ].map((item, idx) => (
           <React.Fragment key={item.step}>
             <div
-              onClick={() => setActiveStep(item.step)}
+              onClick={() => handleStepClick(item.step)}
               className={`flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg transition-all ${
                 activeStep === item.step
                   ? 'bg-blue-600 text-white font-bold shadow-xs'
@@ -408,6 +427,29 @@ export function NewAssessment() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Patient Full Name Field (Required) */}
+              <div className="md:col-span-4 bg-blue-50/40 p-4 rounded-xl border border-blue-200">
+                <label className="block text-xs font-bold text-gray-900 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-blue-600" />
+                    <span>Patient Full Name *</span>
+                  </span>
+                  <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">Required Field</span>
+                </label>
+                <input
+                  type="text"
+                  name="patient_name"
+                  placeholder="e.g. Rahul Sharma, Priya Patil, Amit Shah"
+                  value={formData.patient_name}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-white border border-blue-300 rounded-lg text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                />
+                <span className="text-[11px] text-gray-500 mt-1 block">
+                  Patient name serves as the primary case identifier across clinical summaries, recommendations, reports, and history.
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Age (Years) *</label>
                 <input
@@ -538,7 +580,7 @@ export function NewAssessment() {
             <div className="pt-4 flex justify-end">
               <button
                 type="button"
-                onClick={() => setActiveStep(2)}
+                onClick={() => handleStepClick(2)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
               >
                 <span>Continue to Histopathology</span>
@@ -1420,13 +1462,13 @@ export function NewAssessment() {
           </div>
         )}
 
-        {/* SECTION F: MEDICAL IMAGING UPLOAD & BENCHMARK */}
+        {/* SECTION F: MEDICAL IMAGING UPLOAD & CLINICAL NOTES */}
         {activeStep === 6 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs space-y-5">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">6</span>
-                <h2 className="text-sm font-bold text-gray-800">Section 6: Medical Imaging Upload & Research Benchmark</h2>
+                <h2 className="text-sm font-bold text-gray-800">Section 6: Medical Imaging Upload & Clinical Notes</h2>
               </div>
               <span className="text-[11px] text-gray-400">Step 6 of 6</span>
             </div>
@@ -1519,46 +1561,6 @@ export function NewAssessment() {
                   </button>
                 </div>
               )}
-            </div>
-
-            {/* Research Cohort Volumetric Linkage */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">Research Volumetric Benchmark Association</span>
-                <span className="text-[10px] bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded font-mono">
-                  NoduleMNIST3D
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Connect this assessment session to an empirical 28×28×28 CT volume to evaluate the 3D CNN / Random Forest benign vs malignant classifier during clinical analysis.
-              </p>
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Benchmark Sample ID</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="309"
-                    name="research_sample_id"
-                    value={formData.research_sample_id ?? 12}
-                    onChange={handleChange}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Dataset Split</label>
-                  <select
-                    name="research_split"
-                    value={formData.research_split}
-                    onChange={handleChange}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs"
-                  >
-                    <option value="test">Test Cohort (310 samples)</option>
-                    <option value="val">Validation Cohort (165 samples)</option>
-                    <option value="train">Training Cohort (1158 samples)</option>
-                  </select>
-                </div>
-              </div>
             </div>
 
             {/* Clinical Intake Notes */}

@@ -4,7 +4,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.api.datasets import list_datasets, explore_dataset
-from app.api.assessment import get_assessment, create_assessment, AssessmentCreateRequest
+from app.api.assessment import (
+    get_assessment, create_assessment, AssessmentCreateRequest,
+    analyze_uploaded_image
+)
+from app.database.db import add_medical_image_record, get_connection
+import pydantic
 
 
 def run_tests():
@@ -37,7 +42,21 @@ def run_tests():
     assert ass1.get("occupation") is not None
 
     print("\n=== 4. CREATE NEW PATIENT ASSESSMENT WITH OCCUPATION, ADDRESS, AND BLOOD WORKUP ===")
+    # 4a. Validate patient_name is required
+    try:
+        invalid_patient = AssessmentCreateRequest(
+            patient_name="",  # Should fail validation (min_length=1)
+            age=61.0,
+            gender="female",
+            histology="adenocarcinoma",
+            overall_stage="II"
+        )
+        assert False, "Should have failed validation for empty patient_name"
+    except (pydantic.ValidationError, ValueError):
+        print("  [PASS] Empty patient_name rejected by validation as required")
+
     new_patient = AssessmentCreateRequest(
+        patient_name="Priya Patil",
         age=61.0,
         gender="female",
         occupation="Biomedical Systems Researcher",
@@ -96,17 +115,93 @@ def run_tests():
     get_res = get_assessment(new_id)
     retrieved = get_res["assessment"]
     print(f"Retrieved ID: {retrieved['id']}")
+    print(f"Retrieved Patient Name: {retrieved.get('patient_name')}")
     print(f"Retrieved Occupation: {retrieved['occupation']}")
     print(f"Retrieved Address: {retrieved['address']}")
     print(f"Retrieved CBC Hb: {retrieved['blood_workup']['cbc']['hemoglobin']}")
     print(f"Retrieved RFT Creatinine: {retrieved['blood_workup']['rft']['serum_creatinine']}")
     print(f"Retrieved Electrolytes Na+: {retrieved['blood_workup']['electrolytes']['sodium']}")
 
+    assert retrieved["patient_name"] == "Priya Patil"
     assert retrieved["occupation"] == "Biomedical Systems Researcher"
     assert "Springfield" in retrieved["address"]
     assert retrieved["blood_workup"]["cbc"]["hemoglobin"]["value"] == 13.5
     assert retrieved["blood_workup"]["rft"]["serum_creatinine"]["value"] == 0.85
     assert retrieved["blood_workup"]["electrolytes"]["sodium"]["value"] == 139.0
+
+    print("\n=== 6. VERIFY IDENTICAL PATIENT NAMES YIELD DISTINCT IDS ===")
+    duplicate_name_patient = AssessmentCreateRequest(
+        patient_name="Priya Patil",
+        age=45.0,
+        gender="female",
+        histology="adenocarcinoma",
+        overall_stage="I",
+        occupation="School Teacher",
+        address="102 Lake View, Mumbai, MH"
+    )
+    dup_res = create_assessment(duplicate_name_patient)
+    dup_id = dup_res["assessment_id"]
+    assert dup_id != new_id, "Assessments with identical names must have distinct IDs"
+    dup_get = get_assessment(dup_id)["assessment"]
+    orig_get = get_assessment(new_id)["assessment"]
+    assert dup_get["patient_name"] == "Priya Patil"
+    assert orig_get["patient_name"] == "Priya Patil"
+    assert dup_get["age"] == 45.0
+    assert orig_get["age"] == 61.0
+    print(f"  [PASS] Identical names handled properly: ID1={new_id} (age 61), ID2={dup_id} (age 45)")
+
+    print("\n=== 7. STRICT MEDICAL IMAGE DATA INTEGRITY & ISOLATION CHECKS ===")
+    # 7a. Assessment with no image has empty images list (never fallback or NoduleMNIST3D)
+    assert len(get_res["images"]) == 0, "New assessment with no upload must have 0 attached images"
+    assert len(dup_get["images"]) == 0, "Duplicate name assessment must have 0 attached images"
+    print("  [PASS] No uploaded image yields exactly 0 attached images (no fallback/default)")
+
+    # 7b. Create an image record for new_id and verify it attaches strictly to new_id
+    import tempfile
+    from PIL import Image as PILImage
+    import numpy as np
+
+    # Generate a dummy test CT slice image
+    temp_img_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    test_arr = (np.random.rand(64, 64) * 255).astype(np.uint8)
+    PILImage.fromarray(test_arr).save(temp_img_file.name)
+    temp_img_file.close()
+
+    img_meta = add_medical_image_record(
+        assessment_id=new_id,
+        original_filename="patient_priya_ct_slice.png",
+        stored_filename=os.path.basename(temp_img_file.name),
+        file_format="png",
+        file_size=os.path.getsize(temp_img_file.name),
+        image_dimensions="64x64",
+        image_type="CT",
+        file_path=temp_img_file.name
+    )
+    img_id = img_meta["id"]
+
+    # Verify new_id now has 1 image
+    updated_new = get_assessment(new_id)
+    assert len(updated_new["images"]) == 1
+    assert updated_new["images"][0]["original_filename"] == "patient_priya_ct_slice.png"
+    print(f"  [PASS] Uploaded scan {img_id} properly linked to patient {new_id}")
+
+    # Verify dup_id and DEMO-0001 still have 0 attached images (strict isolation)
+    check_dup = get_assessment(dup_id)
+    check_demo1 = get_assessment("DEMO-0001")
+    assert len(check_dup["images"]) == 0, "Scan must not leak to duplicate named patient"
+    assert len(check_demo1["images"]) == 0, "Scan must not leak to DEMO-0001"
+    print("  [PASS] Strict patient scan isolation verified: image does not leak to other patients")
+
+    # 7c. Test radiometric profiling endpoint on the uploaded scan
+    analysis_res = analyze_uploaded_image(new_id, img_id)
+    assert analysis_res["status"] == "success"
+    assert analysis_res["analysis_status"] == "Completed - 2D Radiometric Profiling"
+    assert "mean_attenuation" in analysis_res["metrics"]
+    print(f"  [PASS] Radiometric profiling succeeded on uploaded image: mean={analysis_res['metrics']['mean_attenuation']}")
+
+    # Clean up temp image
+    if os.path.exists(temp_img_file.name):
+        os.remove(temp_img_file.name)
 
     print("\n[ALL TESTS PASSED SUCCESSFULLY]")
 

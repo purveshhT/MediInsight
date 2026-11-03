@@ -73,6 +73,8 @@ export const listAssessmentImages = (assessmentId: string) =>
 export const getImageInfo = (imageId: string) => api.get(`/images/${imageId}`);
 export const getImageFileUrl = (imageId: string) => `${API_BASE}/images/${imageId}/file`;
 export const deleteImage = (imageId: string) => api.delete(`/images/${imageId}`);
+export const analyzeAssessmentImage = (assessmentId: string, imageId: string) =>
+  api.post(`/assessment/${assessmentId}/images/${imageId}/analyze`);
 
 // ─── Recommendations ─────────────────────────────────────────────────────────
 export const getRecommendations = (data: Record<string, unknown>) =>

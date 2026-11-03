@@ -28,6 +28,7 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS assessments (
         id TEXT PRIMARY KEY,
+        patient_name TEXT NOT NULL DEFAULT 'Anonymous Patient',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         age REAL NOT NULL,
@@ -85,6 +86,8 @@ def init_db():
     cursor.execute("PRAGMA table_info(assessments)")
     existing_cols = {row["name"] for row in cursor.fetchall()}
 
+    if "patient_name" not in existing_cols:
+        cursor.execute("ALTER TABLE assessments ADD COLUMN patient_name TEXT NOT NULL DEFAULT 'Anonymous Patient'")
     if "occupation" not in existing_cols:
         cursor.execute("ALTER TABLE assessments ADD COLUMN occupation TEXT DEFAULT 'Unspecified'")
     if "address" not in existing_cols:
@@ -101,16 +104,25 @@ def init_db():
         _seed_initial_demonstration_records(cursor)
         conn.commit()
     else:
-        # Backfill seed demonstration records if occupation or blood_workup is NULL
+        # Backfill seed demonstration records if patient_name, occupation or blood_workup is missing
         _backfill_demonstration_records(cursor)
         conn.commit()
 
     conn.close()
 
 
-
 def _backfill_demonstration_records(cursor: sqlite3.Cursor):
-    """Backfill occupation, address, and laboratory investigations for existing demo records."""
+    """Backfill patient name, occupation, address, and laboratory investigations for existing demo records."""
+    demo_names = {
+        "DEMO-0001": "Arthur Pendelton",
+        "DEMO-0002": "Eleanor Vance",
+        "DEMO-0003": "Marcus Holloway",
+    }
+    for demo_id, name in demo_names.items():
+        cursor.execute(
+            "UPDATE assessments SET patient_name = ? WHERE id = ? AND (patient_name IS NULL OR patient_name = 'Anonymous Patient' OR patient_name = '')",
+            (name, demo_id)
+        )
     demo_updates = {
         "DEMO-0001": {
             "occupation": "Retired University Professor",
@@ -242,6 +254,7 @@ def _seed_initial_demonstration_records(cursor: sqlite3.Cursor):
     seed_cases = [
         {
             "id": "DEMO-0001",
+            "patient_name": "Arthur Pendelton",
             "created_at": now,
             "updated_at": now,
             "age": 68.0,
@@ -309,6 +322,7 @@ def _seed_initial_demonstration_records(cursor: sqlite3.Cursor):
         },
         {
             "id": "DEMO-0002",
+            "patient_name": "Eleanor Vance",
             "created_at": now,
             "updated_at": now,
             "age": 72.0,
@@ -376,6 +390,7 @@ def _seed_initial_demonstration_records(cursor: sqlite3.Cursor):
         },
         {
             "id": "DEMO-0003",
+            "patient_name": "Marcus Holloway",
             "created_at": now,
             "updated_at": now,
             "age": 59.0,
@@ -446,13 +461,13 @@ def _seed_initial_demonstration_records(cursor: sqlite3.Cursor):
     for item in seed_cases:
         cursor.execute("""
         INSERT INTO assessments (
-            id, created_at, updated_at, age, gender, smoking_history, smoking_pack_years, weight,
+            id, patient_name, created_at, updated_at, age, gender, smoking_history, smoking_pack_years, weight,
             occupation, address, histology, cancer_type, t_stage, n_stage, m_stage, overall_stage, clinical_stage,
             pathological_stage, performance_status, egfr_status, kras_status, alk_status,
             other_biomarkers, blood_workup, medical_history, comorbidities, chemotherapy, radiation, notes,
             assessment_status, data_source, research_sample_id, research_split
         ) VALUES (
-            :id, :created_at, :updated_at, :age, :gender, :smoking_history, :smoking_pack_years, :weight,
+            :id, :patient_name, :created_at, :updated_at, :age, :gender, :smoking_history, :smoking_pack_years, :weight,
             :occupation, :address, :histology, :cancer_type, :t_stage, :n_stage, :m_stage, :overall_stage, :clinical_stage,
             :pathological_stage, :performance_status, :egfr_status, :kras_status, :alk_status,
             :other_biomarkers, :blood_workup, :medical_history, :comorbidities, :chemotherapy, :radiation, :notes,
@@ -485,27 +500,26 @@ def save_assessment_record(data: Dict[str, Any]) -> Dict[str, Any]:
 
     assessment_id = data.get("id") or generate_next_assessment_id()
     now = datetime.now().isoformat()
+    patient_name = str(data.get("patient_name", "")).strip() or "Anonymous Patient"
 
-    # Serialize blood_workup to JSON string if passed as dict/list
-    bw = data.get("blood_workup")
-    if bw is not None and isinstance(bw, (dict, list)):
-        bw_str = json.dumps(bw)
-    elif bw is not None:
-        bw_str = str(bw)
+    blood_workup_val = data.get("blood_workup")
+    if isinstance(blood_workup_val, (dict, list)):
+        blood_workup_str = json.dumps(blood_workup_val)
     else:
-        bw_str = None
+        blood_workup_str = blood_workup_val
 
     record = {
         "id": assessment_id,
+        "patient_name": patient_name,
         "created_at": data.get("created_at", now),
         "updated_at": now,
         "age": float(data.get("age", 65)),
         "gender": str(data.get("gender", "male")).lower(),
+        "occupation": data.get("occupation", "Unspecified"),
+        "address": data.get("address", "Not provided"),
         "smoking_history": data.get("smoking_history", "Unknown"),
         "smoking_pack_years": float(data["smoking_pack_years"]) if data.get("smoking_pack_years") is not None else None,
         "weight": float(data["weight"]) if data.get("weight") is not None else None,
-        "occupation": str(data.get("occupation") or "Unspecified"),
-        "address": str(data.get("address") or "Not provided"),
         "histology": str(data.get("histology", "adenocarcinoma")),
         "cancer_type": data.get("cancer_type", "Non-Small Cell Lung Cancer"),
         "t_stage": str(data.get("t_stage", "1")),
@@ -519,7 +533,7 @@ def save_assessment_record(data: Dict[str, Any]) -> Dict[str, Any]:
         "kras_status": data.get("kras_status", "Unknown"),
         "alk_status": data.get("alk_status", "Unknown"),
         "other_biomarkers": data.get("other_biomarkers"),
-        "blood_workup": bw_str,
+        "blood_workup": blood_workup_str,
         "medical_history": data.get("medical_history"),
         "comorbidities": data.get("comorbidities"),
         "chemotherapy": data.get("chemotherapy", "No"),
@@ -533,14 +547,14 @@ def save_assessment_record(data: Dict[str, Any]) -> Dict[str, Any]:
 
     cursor.execute("""
     INSERT INTO assessments (
-        id, created_at, updated_at, age, gender, smoking_history, smoking_pack_years, weight,
-        occupation, address, histology, cancer_type, t_stage, n_stage, m_stage, overall_stage, clinical_stage,
+        id, patient_name, created_at, updated_at, age, gender, occupation, address, smoking_history, smoking_pack_years, weight,
+        histology, cancer_type, t_stage, n_stage, m_stage, overall_stage, clinical_stage,
         pathological_stage, performance_status, egfr_status, kras_status, alk_status,
         other_biomarkers, blood_workup, medical_history, comorbidities, chemotherapy, radiation, notes,
         assessment_status, data_source, research_sample_id, research_split
     ) VALUES (
-        :id, :created_at, :updated_at, :age, :gender, :smoking_history, :smoking_pack_years, :weight,
-        :occupation, :address, :histology, :cancer_type, :t_stage, :n_stage, :m_stage, :overall_stage, :clinical_stage,
+        :id, :patient_name, :created_at, :updated_at, :age, :gender, :occupation, :address, :smoking_history, :smoking_pack_years, :weight,
+        :histology, :cancer_type, :t_stage, :n_stage, :m_stage, :overall_stage, :clinical_stage,
         :pathological_stage, :performance_status, :egfr_status, :kras_status, :alk_status,
         :other_biomarkers, :blood_workup, :medical_history, :comorbidities, :chemotherapy, :radiation, :notes,
         :assessment_status, :data_source, :research_sample_id, :research_split
@@ -549,13 +563,7 @@ def save_assessment_record(data: Dict[str, Any]) -> Dict[str, Any]:
 
     conn.commit()
     conn.close()
-
-    if record["blood_workup"] and isinstance(record["blood_workup"], str):
-        try:
-            record["blood_workup"] = json.loads(record["blood_workup"])
-        except Exception:
-            pass
-
+    record["blood_workup"] = blood_workup_val
     return record
 
 
@@ -571,8 +579,6 @@ def get_assessment_by_id(assessment_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     assessment = dict(row)
-
-    # Parse blood workup JSON if present
     if assessment.get("blood_workup") and isinstance(assessment["blood_workup"], str):
         try:
             assessment["blood_workup"] = json.loads(assessment["blood_workup"])
@@ -589,7 +595,7 @@ def get_assessment_by_id(assessment_id: str) -> Optional[Dict[str, Any]]:
 
 
 def list_all_assessments(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-    """List all persisted assessments with image counts and parsed blood workups."""
+    """List all persisted assessments with image counts."""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -611,7 +617,6 @@ def list_all_assessments(limit: int = 100, offset: int = 0) -> List[Dict[str, An
             except Exception:
                 pass
         rows.append(d)
-
     conn.close()
     return rows
 
@@ -633,10 +638,7 @@ def update_assessment_record(assessment_id: str, data: Dict[str, Any]) -> Option
     for key, val in data.items():
         if key not in ["id", "created_at", "images"]:
             fields.append(f"{key} = ?")
-            if key == "blood_workup" and isinstance(val, (dict, list)):
-                values.append(json.dumps(val))
-            else:
-                values.append(val)
+            values.append(val)
 
     fields.append("updated_at = ?")
     values.append(now)

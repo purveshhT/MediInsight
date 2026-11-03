@@ -36,7 +36,14 @@ export function SimilarCases() {
     <div className="p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Similar Patient Cases</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Similar Patient Cases</h1>
+            {location.state?.patient?.patient_name && (
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-lg border border-blue-200">
+                Patient: {location.state.patient.patient_name}
+              </span>
+            )}
+          </div>
           <p className="text-gray-500 mt-1">Nearest-neighbor case retrieval across NSCLC-Radiomics cohort (n=422)</p>
         </div>
         <button

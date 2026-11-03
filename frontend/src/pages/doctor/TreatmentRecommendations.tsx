@@ -94,15 +94,15 @@ export function TreatmentRecommendations() {
         <div className="flex items-center gap-3">
           {/* Patient Selector */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-500">Active Patient:</span>
+            <span className="text-gray-500 font-medium">Active Patient:</span>
             <select
               value={assessmentId}
               onChange={(e) => handleAssessmentChange(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white font-mono font-bold"
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white font-medium"
             >
               {allAssessments.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.id} ({a.overall_stage}, {a.histology})
+                  {a.patient_name || 'Anonymous Patient'} — {a.id} ({a.overall_stage}, {a.histology})
                 </option>
               ))}
             </select>
@@ -135,14 +135,19 @@ export function TreatmentRecommendations() {
 
       {/* SECTION A: CLINICAL CONTEXT SUMMARY CARDS */}
       <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
-        <div className="flex items-center justify-between border-b pb-2">
-          <span className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
-            <Activity className="w-4 h-4 text-blue-600" /> Section A: Patient Clinical Context Matrix
-          </span>
-          <span className="text-[11px] text-gray-400 font-mono">Patient Ref: {patient.id}</span>
+        <div className="flex flex-wrap items-center justify-between border-b pb-2 gap-2">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm font-bold text-gray-900">{patient.patient_name || 'Anonymous Patient'}</h2>
+            <span className="text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono font-semibold">
+              Case Ref: {patient.id}
+            </span>
+          </div>
+          <span className="text-xs text-gray-500">Record Origin: SQLite Intake</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
+          <div><span className="text-gray-400 block text-[11px]">Patient Name</span><strong className="text-gray-900 truncate block">{patient.patient_name || 'Anonymous Patient'}</strong></div>
           <div><span className="text-gray-400 block text-[11px]">Age & Gender</span><strong className="text-gray-900">{patient.age} yrs, {patient.gender}</strong></div>
           <div><span className="text-gray-400 block text-[11px]">Histology</span><strong className="text-gray-900 capitalize truncate block">{patient.histology}</strong></div>
           <div><span className="text-gray-400 block text-[11px]">Clinical Stage</span><strong className="text-blue-700 font-bold uppercase">{patient.overall_stage} (T{patient.t_stage}N{patient.n_stage}M{patient.m_stage})</strong></div>

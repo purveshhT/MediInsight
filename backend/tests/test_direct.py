@@ -84,6 +84,7 @@ def run_tests():
 
     # 11. Patient Assessment Creation
     req = AssessmentRequest(
+        patient_name="Rahul Sharma",
         age=66,
         gender="male",
         histology="adenocarcinoma",
@@ -97,6 +98,7 @@ def run_tests():
     )
     ass = create_assessment(req)
     assert ass["assessment_id"].startswith("DEMO-")
+    assert ass["assessment"]["patient_name"] == "Rahul Sharma"
     all_ass = list_assessments()
     assert all_ass["total"] >= 1
     sim_cases = ass.get('similar_cases', [])
