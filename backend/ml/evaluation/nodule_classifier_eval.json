@@ -1,0 +1,177 @@
+{
+  "model": "Random Forest Classifier",
+  "approach": "Hand-crafted statistical features from 3D CT volumes",
+  "features": [
+    "mean_intensity",
+    "std_intensity",
+    "min_intensity",
+    "max_intensity",
+    "percentile_25",
+    "percentile_75",
+    "percentile_90",
+    "percentile_10",
+    "high_intensity_frac",
+    "medium_intensity_frac",
+    "background_frac",
+    "center_mean",
+    "center_std",
+    "center_max",
+    "slice_std",
+    "gradient_x",
+    "gradient_y",
+    "gradient_z",
+    "total_intensity",
+    "variance"
+  ],
+  "training_samples": 1158,
+  "val_samples": 165,
+  "test_samples": 310,
+  "class_weights": {
+    "0": 1.0,
+    "1": 2.925423728813559
+  },
+  "validation_metrics": {
+    "accuracy": 0.8364,
+    "precision": 0.6744,
+    "recall": 0.6905,
+    "f1": 0.6824,
+    "roc_auc": 0.85,
+    "confusion_matrix": [
+      [
+        109,
+        14
+      ],
+      [
+        13,
+        29
+      ]
+    ]
+  },
+  "test_metrics": {
+    "accuracy": 0.8677,
+    "precision": 0.6533,
+    "recall": 0.7656,
+    "f1": 0.705,
+    "roc_auc": 0.8941,
+    "confusion_matrix": [
+      [
+        220,
+        26
+      ],
+      [
+        15,
+        49
+      ]
+    ],
+    "classification_report": {
+      "Benign": {
+        "precision": 0.9361702127659575,
+        "recall": 0.8943089430894309,
+        "f1-score": 0.9147609147609148,
+        "support": 246.0
+      },
+      "Malignant": {
+        "precision": 0.6533333333333333,
+        "recall": 0.765625,
+        "f1-score": 0.7050359712230215,
+        "support": 64.0
+      },
+      "accuracy": 0.867741935483871,
+      "macro avg": {
+        "precision": 0.7947517730496454,
+        "recall": 0.8299669715447154,
+        "f1-score": 0.8098984429919682,
+        "support": 310.0
+      },
+      "weighted avg": {
+        "precision": 0.8777780828185768,
+        "recall": 0.867741935483871,
+        "f1-score": 0.8714628619014788,
+        "support": 310.0
+      }
+    }
+  },
+  "feature_importance": [
+    {
+      "feature": "center_mean",
+      "importance": 0.2411
+    },
+    {
+      "feature": "center_max",
+      "importance": 0.0907
+    },
+    {
+      "feature": "gradient_x",
+      "importance": 0.079
+    },
+    {
+      "feature": "center_std",
+      "importance": 0.064
+    },
+    {
+      "feature": "slice_std",
+      "importance": 0.0531
+    },
+    {
+      "feature": "gradient_y",
+      "importance": 0.0503
+    },
+    {
+      "feature": "std_intensity",
+      "importance": 0.0438
+    },
+    {
+      "feature": "gradient_z",
+      "importance": 0.0416
+    },
+    {
+      "feature": "high_intensity_frac",
+      "importance": 0.0361
+    },
+    {
+      "feature": "variance",
+      "importance": 0.0357
+    },
+    {
+      "feature": "percentile_10",
+      "importance": 0.035
+    },
+    {
+      "feature": "medium_intensity_frac",
+      "importance": 0.033
+    },
+    {
+      "feature": "percentile_90",
+      "importance": 0.0328
+    },
+    {
+      "feature": "background_frac",
+      "importance": 0.031
+    },
+    {
+      "feature": "mean_intensity",
+      "importance": 0.0277
+    },
+    {
+      "feature": "total_intensity",
+      "importance": 0.026
+    },
+    {
+      "feature": "percentile_75",
+      "importance": 0.025
+    },
+    {
+      "feature": "percentile_25",
+      "importance": 0.0223
+    },
+    {
+      "feature": "max_intensity",
+      "importance": 0.0202
+    },
+    {
+      "feature": "min_intensity",
+      "importance": 0.0119
+    }
+  ],
+  "disclaimer": "Research prototype trained on NoduleMNIST3D (28x28x28 low-resolution volumes). Not validated for clinical use."
+}
